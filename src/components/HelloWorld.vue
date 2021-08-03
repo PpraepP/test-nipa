@@ -1,58 +1,177 @@
 <template>
-  <div class="hello">
-    <h1>{{ msg }}</h1>
-    <p>
-      For a guide and recipes on how to configure / customize this project,<br>
-      check out the
-      <a href="https://cli.vuejs.org" target="_blank" rel="noopener">vue-cli documentation</a>.
-    </p>
-    <h3>Installed CLI Plugins</h3>
-    <ul>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-babel" target="_blank" rel="noopener">babel</a></li>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-eslint" target="_blank" rel="noopener">eslint</a></li>
-    </ul>
-    <h3>Essential Links</h3>
-    <ul>
-      <li><a href="https://vuejs.org" target="_blank" rel="noopener">Core Docs</a></li>
-      <li><a href="https://forum.vuejs.org" target="_blank" rel="noopener">Forum</a></li>
-      <li><a href="https://chat.vuejs.org" target="_blank" rel="noopener">Community Chat</a></li>
-      <li><a href="https://twitter.com/vuejs" target="_blank" rel="noopener">Twitter</a></li>
-      <li><a href="https://news.vuejs.org" target="_blank" rel="noopener">News</a></li>
-    </ul>
-    <h3>Ecosystem</h3>
-    <ul>
-      <li><a href="https://router.vuejs.org" target="_blank" rel="noopener">vue-router</a></li>
-      <li><a href="https://vuex.vuejs.org" target="_blank" rel="noopener">vuex</a></li>
-      <li><a href="https://github.com/vuejs/vue-devtools#vue-devtools" target="_blank" rel="noopener">vue-devtools</a></li>
-      <li><a href="https://vue-loader.vuejs.org" target="_blank" rel="noopener">vue-loader</a></li>
-      <li><a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">awesome-vue</a></li>
-    </ul>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <h2>Camera</h2>
+        <div class="border">
+          <vue-web-cam
+            ref="webcam"
+            :device-id="deviceId"
+            width="100%"
+            @started="onStarted"
+            @stopped="onStopped"
+            @error="onError"
+            @cameras="onCameras"
+          />
+        </div>
+
+        <div class="row">
+          <div class="col-md-12">
+            <div class="group-btn">
+              <v-btn color="primary" @click="onCapture">
+                Capture Photo
+              </v-btn>
+              <v-btn color="error" @click="onStop">
+                Stop Camera
+              </v-btn>
+              <v-btn color="success" @click="onStart">
+                Start Camera
+              </v-btn>
+            </div>
+          </div>
+        </div>
+
+        <FormFile @selectedFile="previewFiles" />
+      </div>
+
+      <div class="col-md-6">
+        <div class="capture-image">
+          <h2>Captured Image</h2>
+          <div class="figure">
+            <img :src="showImg" class="img-responsive" />
+          </div>
+        </div>
+
+        <list-detech v-if="detechList" :valueDetech="detechList" />
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { WebCam } from "vue-web-cam";
+import nvision from "@nipacloud/nvision";
+import FormFile from "@/components/FormFile.vue";
+import List from "@/components/List.vue";
 export default {
-  name: 'HelloWorld',
-  props: {
-    msg: String
+  name: "App",
+  components: {
+    "vue-web-cam": WebCam,
+    FormFile,
+    "list-detech": List,
+  },
+  data() {
+    return {
+      img: null,
+      showImg: "",
+      camera: null,
+      deviceId: null,
+      devices: [],
+      decodeBase64: "",
+      detechList: "",
+      styleDetech: [],
+    };
+  },
+  watch: {
+    camera: function(id) {
+      this.deviceId = id;
+    },
+    devices: function() {
+      // Once we have a list select the first one
+      const [first, ...tail] = this.devices;
+      if (first) {
+        this.camera = first.deviceId;
+        this.deviceId = first.deviceId;
+        console.log("tail", tail);
+      }
+    },
+  },
+  methods: {
+    previewFiles(event) {
+      console.log("event", event);
+      const selectedImage = event;
+      this.imageToBase64(selectedImage);
+      console.log(selectedImage);
+    },
+    imageToBase64(file) {
+      var reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        console.log("file to base64 result:" + reader.result);
+        this.decodeBase64 = reader.result;
+        this.showImg = this.decodeBase64;
+        this.getDetectNvision(this.decodeBase64);
+      };
+      reader.onerror = function(error) {
+        console.log("Error: ", error);
+      };
+    },
+    onCapture() {
+      this.img = this.$refs.webcam.capture();
+      this.showImg = this.$refs.webcam.capture();
+      console.log("img", this.img);
+      this.getDetectNvision(this.img);
+    },
+    getDetectNvision(code) {
+      const objectDetectionService = nvision.objectDetection({
+        apiKey:
+          "cdb29f355cb4059995e05420dc8d963f657898bf3a5f2f5e7a88c58279f5e4a0a1c4c4cf874594b42e413fc45c425425ac",
+      });
+
+      objectDetectionService
+        .predict({
+          rawData: code.replace(/data:.+;base64,/, ""),
+        })
+        .then((result) => {
+          console.log(result.detected_objects);
+          this.detechList = result.detected_objects;
+          this.styleDetech = this.detechList.map((item) => item.bounding_box);
+          console.log("this.styleDetech", this.styleDetech);
+        });
+    },
+    onStarted(stream) {
+      console.log("On Started Event", stream);
+    },
+    onStopped(stream) {
+      console.log("On Stopped Event", stream);
+    },
+    onStop() {
+      this.$refs.webcam.stop();
+    },
+    onStart() {
+      this.$refs.webcam.start();
+    },
+    onError(error) {
+      console.log("On Error Event", error);
+    },
+    onCameras(cameras) {
+      this.devices = cameras;
+      console.log("On Cameras Event", cameras);
+    },
+  },
+};
+</script>
+<style lang="scss" scoped>
+.capture-image {
+  .figure {
+    position: relative;
+  }
+  img {
+    width: 100%;
+  }
+  .overlay-box {
+    position: relative;
+    &__list {
+      position: absolute;
+      border: 2px solid;
+    }
   }
 }
-</script>
-
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-h3 {
-  margin: 40px 0 0;
-}
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-li {
-  display: inline-block;
-  margin: 0 10px;
-}
-a {
-  color: #42b983;
+.group-btn {
+  button {
+    &:not(:last-child) {
+      margin-right: 15px;
+    }
+  }
 }
 </style>
