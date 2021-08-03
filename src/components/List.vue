@@ -20,7 +20,7 @@ export default {
 .v-list-item {
   flex-wrap: wrap;
   &__content {
-    flex: 50%;
+    flex: 100%;
   }
 }
 </style>
